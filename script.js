@@ -106,10 +106,26 @@ document.getElementById('bookmarkButton').addEventListener('click', function () 
     if (selection && selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
         let parentParagraph = range.startContainer;
+
+        // Traverse up to find the <p> element
         while (parentParagraph && parentParagraph.nodeName !== 'P') {
             parentParagraph = parentParagraph.parentElement;
         }
+
+        if (!parentParagraph) {
+            // Touch devices may not support selection well; use a fallback
+            const touchedParagraph = document.elementFromPoint(
+                selection.focusNode?.parentElement?.offsetLeft || 0,
+                selection.focusNode?.parentElement?.offsetTop || 0
+            );
+
+            if (touchedParagraph?.nodeName === 'P') {
+                parentParagraph = touchedParagraph;
+            }
+        }
+
         if (parentParagraph) {
+            // Bookmark logic remains the same
             document.querySelectorAll('[data-bookmark-id]').forEach(node => {
                 node.removeAttribute('data-bookmark-id');
                 node.classList.remove('bookmark');
@@ -119,15 +135,32 @@ document.getElementById('bookmarkButton').addEventListener('click', function () 
             parentParagraph.setAttribute('data-bookmark-id', bookmarkId);
             parentParagraph.classList.add('bookmark');
 
-            saveBookmark(bookmarkId);
+            lastBookmarkId = bookmarkId;
+            saveBookmarkToXmlDoc(bookmarkId, parentParagraph.textContent);
+
+            const body = xmlDoc.getElementsByTagName("body")[0];
+            loadContent(body, "all");
+
             console.log("Bookmark added with ID:", bookmarkId);
         } else {
-            console.error("Selection is not within a paragraph.");
+            console.error("Could not find a valid paragraph to bookmark.");
         }
     } else {
-        console.error("No selection found for adding a bookmark.");
+        console.error("No text selected or unsupported selection.");
     }
 });
+
+const bookmarkButton = document.getElementById('bookmarkButton');
+
+// Handle touchstart and click
+bookmarkButton.addEventListener('touchstart', handleAddBookmark);
+bookmarkButton.addEventListener('click', handleAddBookmark);
+
+function handleAddBookmark(event) {
+    event.preventDefault(); // Prevent touch events from conflicting
+    // (Bookmark logic from above here)
+}
+
 
 // Parse FB2 body
 function parseFb2Body(body) {
@@ -216,6 +249,31 @@ function scrollToBookmark(bookmarkId) {
         bookmarkElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
+
+// Use a helper function to find the parent <p> reliably
+function findParentParagraph(node) {
+    while (node && node.nodeName !== 'P') {
+        node = node.parentElement;
+    }
+    return node;
+}
+
+// Use the helper in the logic
+let parentParagraph = findParentParagraph(range.startContainer);
+
+// Add fallback for touch devices if selection is empty
+if (!parentParagraph) {
+    const touchedElement = document.elementFromPoint(event.touches[0].clientX, event.touches[0].clientY);
+    parentParagraph = findParentParagraph(touchedElement);
+}
+
+console.log("Selection:", selection);
+console.log("Selected Node:", selection?.focusNode);
+console.log("Parent Paragraph:", parentParagraph);
+
+document.addEventListener('touchstart', (event) => {
+    console.log("Touchstart event:", event.touches[0]);
+});
 
 // Save bookmark in XML
 function saveBookmark(bookmarkId) {
