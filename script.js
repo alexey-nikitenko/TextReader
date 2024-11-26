@@ -76,8 +76,6 @@ document.getElementById('loadBookmarkButton').addEventListener('click', function
     }
 });
 
-
-
 // Save changes
 document.getElementById('saveButton').addEventListener('click', function () {
     if (xmlDoc) {
@@ -102,65 +100,69 @@ document.getElementById('saveButton').addEventListener('click', function () {
 
 // Add bookmark
 document.getElementById('bookmarkButton').addEventListener('click', function () {
+    let parentParagraph = null;
+
+    // Try detecting text selection
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
-        let parentParagraph = range.startContainer;
+        parentParagraph = findParentParagraph(range.startContainer);
+    }
 
-        // Traverse up to find the <p> element
-        while (parentParagraph && parentParagraph.nodeName !== 'P') {
-            parentParagraph = parentParagraph.parentElement;
-        }
-
-        if (!parentParagraph) {
-            // Touch devices may not support selection well; use a fallback
-            const touchedParagraph = document.elementFromPoint(
-                selection.focusNode?.parentElement?.offsetLeft || 0,
-                selection.focusNode?.parentElement?.offsetTop || 0
-            );
-
-            if (touchedParagraph?.nodeName === 'P') {
-                parentParagraph = touchedParagraph;
+    // Fallback for touch devices if no selection is detected
+    if (!parentParagraph) {
+        const touchHandler = (event) => {
+            const touch = event.changedTouches[0];
+            const touchedElement = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (touchedElement && touchedElement.nodeName === 'P') {
+                parentParagraph = touchedElement;
+                addBookmarkToParagraph(parentParagraph); // Add bookmark to detected paragraph
             }
-        }
+            document.removeEventListener('touchend', touchHandler); // Remove the touch event listener
+        };
 
-        if (parentParagraph) {
-            // Bookmark logic remains the same
-            document.querySelectorAll('[data-bookmark-id]').forEach(node => {
-                node.removeAttribute('data-bookmark-id');
-                node.classList.remove('bookmark');
-            });
+        document.addEventListener('touchend', touchHandler, { once: true });
+    }
 
-            const bookmarkId = 'bookmark-' + new Date().getTime();
-            parentParagraph.setAttribute('data-bookmark-id', bookmarkId);
-            parentParagraph.classList.add('bookmark');
-
-            lastBookmarkId = bookmarkId;
-            saveBookmarkToXmlDoc(bookmarkId, parentParagraph.textContent);
-
-            const body = xmlDoc.getElementsByTagName("body")[0];
-            loadContent(body, "all");
-
-            console.log("Bookmark added with ID:", bookmarkId);
-        } else {
-            console.error("Could not find a valid paragraph to bookmark.");
-        }
+    if (parentParagraph) {
+        addBookmarkToParagraph(parentParagraph);
     } else {
-        console.error("No text selected or unsupported selection.");
+        console.error("Could not find a valid paragraph to bookmark.");
     }
 });
 
-const bookmarkButton = document.getElementById('bookmarkButton');
+// Helper function to add bookmark to a paragraph
+function addBookmarkToParagraph(paragraph) {
+    // Clear all existing bookmarks
+    document.querySelectorAll('[data-bookmark-id]').forEach(node => {
+        node.removeAttribute('data-bookmark-id');
+        node.classList.remove('bookmark');
+    });
 
-// Handle touchstart and click
-bookmarkButton.addEventListener('touchstart', handleAddBookmark);
-bookmarkButton.addEventListener('click', handleAddBookmark);
+    // Add a new bookmark
+    const bookmarkId = 'bookmark-' + new Date().getTime();
+    paragraph.setAttribute('data-bookmark-id', bookmarkId);
+    paragraph.classList.add('bookmark');
 
-function handleAddBookmark(event) {
-    event.preventDefault(); // Prevent touch events from conflicting
-    // (Bookmark logic from above here)
+    lastBookmarkId = bookmarkId;
+
+    // Save the bookmark to XML
+    saveBookmarkToXmlDoc(bookmarkId, paragraph.textContent);
+
+    // Reload content to reflect changes
+    const body = xmlDoc.getElementsByTagName("body")[0];
+    loadContent(body, "all");
+
+    console.log("Bookmark added with ID:", bookmarkId);
 }
 
+// Helper function to find the parent paragraph
+function findParentParagraph(node) {
+    while (node && node.nodeName !== 'P') {
+        node = node.parentElement;
+    }
+    return node;
+}
 
 // Parse FB2 body
 function parseFb2Body(body) {
